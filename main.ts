@@ -4,10 +4,14 @@
 // Game variables
 let snake: Sprite[] = []
 let food: Sprite = null
+let greenApple: Sprite = null
 let direction = 0 // 0=up, 1=right, 2=down, 3=left
 let nextDirection = 0
 let score = 0
 let gameRunning = false
+let wallInvincibleUntil = 0
+let isRainbowMode = false
+let greenAppleSpawnTime = 0
 
 // Game settings
 const GRID_SIZE = 8
@@ -25,6 +29,9 @@ function initGame() {
     if (food) {
         food.destroy()
     }
+    if (greenApple) {
+        greenApple.destroy()
+    }
     
     // Clear all sprites of these kinds (safety measure)
     sprites.allOfKind(SpriteKind.Player).forEach(function(sprite) {
@@ -40,6 +47,9 @@ function initGame() {
     nextDirection = 0
     score = 0
     gameRunning = true
+    wallInvincibleUntil = 0
+    isRainbowMode = false
+    greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // 30-45 seconds
     
     // Create initial snake (3 segments)
     for (let i = 0; i < 3; i++) {
@@ -121,6 +131,84 @@ function spawnFood() {
     food.y = foodY
 }
 
+// Spawn green apple at random location
+function spawnGreenApple() {
+    if (greenApple) {
+        greenApple.destroy()
+        greenApple = null
+    }
+    
+    let appleX: number = 0
+    let appleY: number = 0
+    let validPosition = false
+    let attempts = 0
+    const MAX_ATTEMPTS = 100
+    
+    // Find a position not occupied by snake or regular food
+    while (!validPosition && attempts < MAX_ATTEMPTS) {
+        attempts++
+        // Generate random position aligned to grid
+        appleX = Math.floor(Math.random() * GRID_WIDTH) * GRID_SIZE + GRID_SIZE / 2
+        appleY = Math.floor(Math.random() * GRID_HEIGHT) * GRID_SIZE + GRID_SIZE / 2
+        
+        // Ensure position is within screen bounds
+        if (appleX < GRID_SIZE / 2) appleX = GRID_SIZE / 2
+        if (appleX >= scene.screenWidth() - GRID_SIZE / 2) appleX = scene.screenWidth() - GRID_SIZE / 2
+        if (appleY < GRID_SIZE / 2) appleY = GRID_SIZE / 2
+        if (appleY >= scene.screenHeight() - GRID_SIZE / 2) appleY = scene.screenHeight() - GRID_SIZE / 2
+        
+        validPosition = true
+        
+        // Check if position overlaps with snake
+        for (let segment of snake) {
+            let dx = Math.abs(segment.x - appleX)
+            let dy = Math.abs(segment.y - appleY)
+            if (dx < GRID_SIZE && dy < GRID_SIZE) {
+                validPosition = false
+                break
+            }
+        }
+        
+        // Check if position overlaps with regular food
+        if (food && Math.abs(food.x - appleX) < GRID_SIZE && Math.abs(food.y - appleY) < GRID_SIZE) {
+            validPosition = false
+        }
+    }
+    
+    // Create green apple sprite
+    greenApple = sprites.create(img`
+        . . . . . . . .
+        . . . . . . . .
+        . . . . . . . .
+        . . 7 7 . . . .
+        . . 7 7 . . . .
+        . . . . . . . .
+        . . . . . . . .
+        . . . . . . . .
+    `, SpriteKind.Food)
+    greenApple.x = appleX
+    greenApple.y = appleY
+}
+
+// Update snake to rainbow colors
+function updateSnakeRainbow() {
+    if (!isRainbowMode) return
+    
+    let colorIndex = 0
+    const rainbowColors = [2, 3, 4, 5, 6, 7, 8, 9] // Red, Orange, Yellow, Green, Blue, Indigo, Violet, Pink
+    
+    for (let segment of snake) {
+        let color = rainbowColors[colorIndex % rainbowColors.length]
+        // Create rainbow-colored sprite
+        let rainbowImg = image.create(8, 8)
+        rainbowImg.fill(color)
+        rainbowImg.replace(color, 0)
+        rainbowImg.drawRect(2, 3, 2, 2, color)
+        segment.setImage(rainbowImg)
+        colorIndex++
+    }
+}
+
 // Move snake
 function moveSnake() {
     if (!gameRunning) return
@@ -141,11 +229,19 @@ function moveSnake() {
     else if (direction == 2) newY += GRID_SIZE // Down
     else if (direction == 3) newX -= GRID_SIZE // Left
     
-    // Check wall collision - game over if hit wall
-    if (newX < GRID_SIZE / 2 || newX >= scene.screenWidth() - GRID_SIZE / 2 ||
-        newY < GRID_SIZE / 2 || newY >= scene.screenHeight() - GRID_SIZE / 2) {
-        gameOver()
-        return
+    // Check wall collision - game over if hit wall (unless invincible)
+    if (game.runtime() >= wallInvincibleUntil) {
+        if (newX < GRID_SIZE / 2 || newX >= scene.screenWidth() - GRID_SIZE / 2 ||
+            newY < GRID_SIZE / 2 || newY >= scene.screenHeight() - GRID_SIZE / 2) {
+            gameOver()
+            return
+        }
+    } else {
+        // Wrap around if invincible
+        if (newX < GRID_SIZE / 2) newX = scene.screenWidth() - GRID_SIZE / 2
+        if (newX >= scene.screenWidth() - GRID_SIZE / 2) newX = GRID_SIZE / 2
+        if (newY < GRID_SIZE / 2) newY = scene.screenHeight() - GRID_SIZE / 2
+        if (newY >= scene.screenHeight() - GRID_SIZE / 2) newY = GRID_SIZE / 2
     }
     
     // Check collision with self (check before creating new head)
@@ -160,32 +256,70 @@ function moveSnake() {
     }
     
     // Create new head
-    let newHead = sprites.create(img`
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        . . 1 1 . . . .
-        . . 1 1 . . . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-    `, SpriteKind.Player)
+    let headImage = null
+    if (isRainbowMode) {
+        // Create rainbow head
+        headImage = image.create(8, 8)
+        headImage.fill(0)
+        headImage.drawRect(2, 3, 2, 2, 2) // Red for head
+    } else {
+        headImage = img`
+            . . . . . . . .
+            . . . . . . . .
+            . . . . . . . .
+            . . 1 1 . . . .
+            . . 1 1 . . . .
+            . . . . . . . .
+            . . . . . . . .
+            . . . . . . . .
+        `
+    }
+    
+    let newHead = sprites.create(headImage, SpriteKind.Player)
     newHead.x = newX
     newHead.y = newY
     snake.unshift(newHead)
     
-    // Check if food eaten using distance check
+    // Check if regular food eaten using distance check
     let foodDx = Math.abs(newHead.x - food.x)
     let foodDy = Math.abs(newHead.y - food.y)
+    let foodEaten = false
+    
     if (foodDx < GRID_SIZE && foodDy < GRID_SIZE) {
         score += 10
         info.setScore(score)
         spawnFood()
         music.playTone(Note.C, 100)
-    } else {
-        // Remove tail
+        foodEaten = true
+    }
+    
+    // Check if green apple eaten
+    let greenAppleEaten = false
+    if (greenApple && !foodEaten) {
+        let appleDx = Math.abs(newHead.x - greenApple.x)
+        let appleDy = Math.abs(newHead.y - greenApple.y)
+        if (appleDx < GRID_SIZE && appleDy < GRID_SIZE) {
+            // Activate rainbow mode and wall invincibility (doesn't make snake grow)
+            isRainbowMode = true
+            wallInvincibleUntil = game.runtime() + 10000 // 10 seconds
+            greenApple.destroy()
+            greenApple = null
+            greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // Schedule next spawn
+            music.playTone(Note.E, 200)
+            updateSnakeRainbow()
+            greenAppleEaten = true
+        }
+    }
+    
+    // Remove tail only if regular food wasn't eaten (green apples don't make snake grow)
+    if (!foodEaten) {
         let tail = snake.pop()
         tail.destroy()
+    }
+    
+    // Update rainbow colors if in rainbow mode
+    if (isRainbowMode) {
+        updateSnakeRainbow()
     }
 }
 
@@ -220,5 +354,34 @@ initGame()
 // Game loop - move snake every 150ms
 game.onUpdateInterval(150, function () {
     moveSnake()
+})
+
+// Check for green apple spawn timer
+game.onUpdateInterval(1000, function () {
+    if (!gameRunning) return
+    
+    // Check if it's time to spawn green apple
+    if (game.runtime() >= greenAppleSpawnTime && !greenApple) {
+        spawnGreenApple()
+        greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // Schedule next spawn
+    }
+    
+    // Check if wall invincibility expired
+    if (isRainbowMode && game.runtime() >= wallInvincibleUntil) {
+        isRainbowMode = false
+        // Revert snake to normal colors
+        for (let segment of snake) {
+            segment.setImage(img`
+                . . . . . . . .
+                . . . . . . . .
+                . . . . . . . .
+                . . 1 1 . . . .
+                . . 1 1 . . . .
+                . . . . . . . .
+                . . . . . . . .
+                . . . . . . . .
+            `)
+        }
+    }
 })
 
