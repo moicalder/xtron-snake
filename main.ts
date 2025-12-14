@@ -13,7 +13,7 @@ let wallInvincibleUntil = 0
 let isWallInvincible = false
 let isRainbowMode = false
 let greenAppleSpawnTime = 0
-let gameState = "splash" // "splash" or "playing"
+let onSplashScreen = true
 
 // Game settings
 const GRID_SIZE = 8
@@ -22,25 +22,22 @@ const GRID_HEIGHT = Math.floor(scene.screenHeight() / GRID_SIZE)
 
 // Show splash screen
 function showSplashScreen() {
-    gameState = "splash"
-    // Set background to loading screen
+    onSplashScreen = true
+    gameRunning = false
+    
+    // Set background to loading screen asset
     scene.setBackgroundImage(assets.image`loadingScreen`)
+    
     // Clear any existing sprites
-    sprites.destroyAllSpritesOfKind(SpriteKind.Player)
-    sprites.destroyAllSpritesOfKind(SpriteKind.Food)
-    // Display "Press A to start" text
-    let startText = textsprite.create("Press A to start")
-    startText.setPosition(80, 100)
-}
-
-// Start the actual game
-function startGame() {
-    gameState = "playing"
-    // Reset background to default (black)
-    scene.setBackgroundColor(0)
-    // Clear any text sprites from splash screen
-    sprites.destroyAllSpritesOfKind(SpriteKind.Text)
-    initGame()
+    sprites.allOfKind(SpriteKind.Player).forEach(function(sprite) {
+        sprite.destroy()
+    })
+    sprites.allOfKind(SpriteKind.Food).forEach(function(sprite) {
+        sprite.destroy()
+    })
+    
+    // Text "Press A to start" should be included in the loadingScreen image asset
+    // No need to show text overlay - it's part of the background image
 }
 
 // Initialize game
@@ -72,12 +69,20 @@ function initGame() {
     nextDirection = 0
     score = 0
     gameRunning = true
+    onSplashScreen = false
     wallInvincibleUntil = 0
     isWallInvincible = false
     isRainbowMode = false
     greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // 30-45 seconds
     
-    // Create initial snake (3 segments)
+    // Clear background (remove splash screen) - set to blank/black
+    scene.setBackgroundColor(0)
+    scene.setBackgroundImage(null)
+    
+    // Create initial snake (3 segments) - snap to grid
+    const startX = Math.floor(scene.screenWidth() / 2 / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+    const startY = Math.floor(scene.screenHeight() / 2 / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+    
     for (let i = 0; i < 3; i++) {
         let segment = sprites.create(img`
             . . . . . . . .
@@ -89,8 +94,8 @@ function initGame() {
             . . . . . . . .
             . . . . . . . .
         `, SpriteKind.Player)
-        segment.x = scene.screenWidth() / 2
-        segment.y = scene.screenHeight() / 2 + (i * GRID_SIZE)
+        segment.x = startX
+        segment.y = startY + (i * GRID_SIZE)
         snake.push(segment)
     }
     
@@ -131,12 +136,21 @@ function spawnFood() {
         foodX = Math.floor(foodX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         foodY = Math.floor(foodY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         
-        // Ensure position is within screen bounds
+        // Ensure position is within screen bounds (sprite is 8x8, extends 4 pixels from center)
         const SPRITE_HALF_SIZE = 4
-        if (foodX < SPRITE_HALF_SIZE) foodX = SPRITE_HALF_SIZE
-        if (foodX >= scene.screenWidth() - SPRITE_HALF_SIZE) foodX = scene.screenWidth() - SPRITE_HALF_SIZE
-        if (foodY < SPRITE_HALF_SIZE) foodY = SPRITE_HALF_SIZE
-        if (foodY >= scene.screenHeight() - SPRITE_HALF_SIZE) foodY = scene.screenHeight() - SPRITE_HALF_SIZE
+        const minX = SPRITE_HALF_SIZE
+        const maxX = scene.screenWidth() - SPRITE_HALF_SIZE
+        const minY = SPRITE_HALF_SIZE
+        const maxY = scene.screenHeight() - SPRITE_HALF_SIZE
+        
+        if (foodX < minX) foodX = minX
+        if (foodX > maxX) foodX = maxX
+        if (foodY < minY) foodY = minY
+        if (foodY > maxY) foodY = maxY
+        
+        // Re-snap to grid after bounds check
+        foodX = Math.floor(foodX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+        foodY = Math.floor(foodY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         
         validPosition = true
         
@@ -196,12 +210,21 @@ function spawnGreenApple() {
         appleX = Math.floor(appleX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         appleY = Math.floor(appleY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         
-        // Ensure position is within screen bounds
+        // Ensure position is within screen bounds (sprite is 8x8, extends 4 pixels from center)
         const SPRITE_HALF_SIZE = 4
-        if (appleX < SPRITE_HALF_SIZE) appleX = SPRITE_HALF_SIZE
-        if (appleX >= scene.screenWidth() - SPRITE_HALF_SIZE) appleX = scene.screenWidth() - SPRITE_HALF_SIZE
-        if (appleY < SPRITE_HALF_SIZE) appleY = SPRITE_HALF_SIZE
-        if (appleY >= scene.screenHeight() - SPRITE_HALF_SIZE) appleY = scene.screenHeight() - SPRITE_HALF_SIZE
+        const minX = SPRITE_HALF_SIZE
+        const maxX = scene.screenWidth() - SPRITE_HALF_SIZE
+        const minY = SPRITE_HALF_SIZE
+        const maxY = scene.screenHeight() - SPRITE_HALF_SIZE
+        
+        if (appleX < minX) appleX = minX
+        if (appleX > maxX) appleX = maxX
+        if (appleY < minY) appleY = minY
+        if (appleY > maxY) appleY = maxY
+        
+        // Re-snap to grid after bounds check
+        appleX = Math.floor(appleX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+        appleY = Math.floor(appleY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         
         validPosition = true
         
@@ -257,7 +280,7 @@ function updateSnakeRainbow() {
 
 // Move snake
 function moveSnake() {
-    if (!gameRunning || gameState !== "playing") return
+    if (!gameRunning || onSplashScreen) return
     
     // Update direction (can't reverse)
     if (nextDirection == 0 && direction != 2) direction = 0
@@ -275,27 +298,49 @@ function moveSnake() {
     else if (direction == 2) newY += GRID_SIZE // Down
     else if (direction == 3) newX -= GRID_SIZE // Left
     
-    // Check wall collision - game over if hit wall (unless invincible)
-    // Sprite is 8x8, so it extends 4 pixels from center. Allow it to reach the very edge.
+    // Check wall collision BEFORE grid snapping to handle wrapping correctly
+    // Sprite is 8x8, so it extends 4 pixels from center
     const SPRITE_HALF_SIZE = 4
     
-    // Check for wall collision
-    const outOfBounds = newX < SPRITE_HALF_SIZE || newX >= scene.screenWidth() - SPRITE_HALF_SIZE ||
-                        newY < SPRITE_HALF_SIZE || newY >= scene.screenHeight() - SPRITE_HALF_SIZE
+    // Calculate sprite edges (full sprite bounds) BEFORE grid snapping
+    const spriteLeft = newX - SPRITE_HALF_SIZE
+    const spriteRight = newX + SPRITE_HALF_SIZE
+    const spriteTop = newY - SPRITE_HALF_SIZE
+    const spriteBottom = newY + SPRITE_HALF_SIZE
+    
+    // Check for wall collision - sprite must be fully within screen bounds
+    const outOfBounds = spriteLeft < 0 || spriteRight > scene.screenWidth() ||
+                        spriteTop < 0 || spriteBottom > scene.screenHeight()
 
     if (outOfBounds) {
         if (isWallInvincible) {
-            // Wrap around if invincible to walls - place just inside the boundary
-            if (newX < SPRITE_HALF_SIZE) newX = scene.screenWidth() - SPRITE_HALF_SIZE - 1
-            if (newX >= scene.screenWidth() - SPRITE_HALF_SIZE) newX = SPRITE_HALF_SIZE + 1
-            if (newY < SPRITE_HALF_SIZE) newY = scene.screenHeight() - SPRITE_HALF_SIZE - 1
-            if (newY >= scene.screenHeight() - SPRITE_HALF_SIZE) newY = SPRITE_HALF_SIZE + 1
+            // Wrap around if invincible to walls - wrap to opposite side
+            if (spriteLeft < 0) {
+                // Wrap to right side
+                newX = scene.screenWidth() - SPRITE_HALF_SIZE - 1
+            }
+            if (spriteRight > scene.screenWidth()) {
+                // Wrap to left side
+                newX = SPRITE_HALF_SIZE + 1
+            }
+            if (spriteTop < 0) {
+                // Wrap to bottom
+                newY = scene.screenHeight() - SPRITE_HALF_SIZE - 1
+            }
+            if (spriteBottom > scene.screenHeight()) {
+                // Wrap to top
+                newY = SPRITE_HALF_SIZE + 1
+            }
         } else {
             // Die if not invincible
             gameOver()
             return
         }
     }
+    
+    // Snap position to grid for consistent alignment AFTER bounds check/wrapping
+    newX = Math.floor(newX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+    newY = Math.floor(newY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
     
     // Check collision with self (always check - no invincibility)
     for (let segment of snake) {
@@ -383,7 +428,7 @@ function gameOver() {
     gameRunning = false
     game.splash("Game Over!", "Score: " + score)
     pause(1000)
-    showSplashScreen()
+    initGame()
 }
 
 // Input handling
@@ -403,26 +448,24 @@ controller.left.onEvent(ControllerButtonEvent.Pressed, function () {
     nextDirection = 3
 })
 
-// A button handler for splash screen
+// Handle A button press to start game from splash screen
 controller.A.onEvent(ControllerButtonEvent.Pressed, function () {
-    if (gameState === "splash") {
-        startGame()
+    if (onSplashScreen) {
+        initGame()
     }
 })
 
-// Start with splash screen
+// Show splash screen on startup
 showSplashScreen()
 
 // Game loop - move snake every 150ms
 game.onUpdateInterval(150, function () {
-    if (gameState === "playing") {
-        moveSnake()
-    }
+    moveSnake()
 })
 
 // Check for green apple spawn timer
 game.onUpdateInterval(1000, function () {
-    if (!gameRunning || gameState !== "playing") return
+    if (!gameRunning || onSplashScreen) return
     
     // Check if it's time to spawn green apple
     if (game.runtime() >= greenAppleSpawnTime && !greenApple) {
