@@ -10,6 +10,7 @@ let nextDirection = 0
 let score = 0
 let gameRunning = false
 let wallInvincibleUntil = 0
+let isWallInvincible = false
 let isRainbowMode = false
 let greenAppleSpawnTime = 0
 
@@ -48,6 +49,7 @@ function initGame() {
     score = 0
     gameRunning = true
     wallInvincibleUntil = 0
+    isWallInvincible = false
     isRainbowMode = false
     greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // 30-45 seconds
     
@@ -89,18 +91,28 @@ function spawnFood() {
     let attempts = 0
     const MAX_ATTEMPTS = 100
     
-    // Find a position not occupied by snake
+    // Find a position not occupied by snake, biased toward center
     while (!validPosition && attempts < MAX_ATTEMPTS) {
         attempts++
-        // Generate random position aligned to grid
-        foodX = Math.floor(Math.random() * GRID_WIDTH) * GRID_SIZE + GRID_SIZE / 2
-        foodY = Math.floor(Math.random() * GRID_HEIGHT) * GRID_SIZE + GRID_SIZE / 2
+        // Generate random position aligned to grid, biased toward center (60% of screen width/height)
+        const centerX = scene.screenWidth() / 2
+        const centerY = scene.screenHeight() / 2
+        const spawnWidth = scene.screenWidth() * 0.6
+        const spawnHeight = scene.screenHeight() * 0.6
+        
+        foodX = centerX + (Math.random() - 0.5) * spawnWidth
+        foodY = centerY + (Math.random() - 0.5) * spawnHeight
+        
+        // Align to grid
+        foodX = Math.floor(foodX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+        foodY = Math.floor(foodY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         
         // Ensure position is within screen bounds
-        if (foodX < GRID_SIZE / 2) foodX = GRID_SIZE / 2
-        if (foodX >= scene.screenWidth() - GRID_SIZE / 2) foodX = scene.screenWidth() - GRID_SIZE / 2
-        if (foodY < GRID_SIZE / 2) foodY = GRID_SIZE / 2
-        if (foodY >= scene.screenHeight() - GRID_SIZE / 2) foodY = scene.screenHeight() - GRID_SIZE / 2
+        const SPRITE_HALF_SIZE = 4
+        if (foodX < SPRITE_HALF_SIZE) foodX = SPRITE_HALF_SIZE
+        if (foodX >= scene.screenWidth() - SPRITE_HALF_SIZE) foodX = scene.screenWidth() - SPRITE_HALF_SIZE
+        if (foodY < SPRITE_HALF_SIZE) foodY = SPRITE_HALF_SIZE
+        if (foodY >= scene.screenHeight() - SPRITE_HALF_SIZE) foodY = scene.screenHeight() - SPRITE_HALF_SIZE
         
         validPosition = true
         
@@ -144,18 +156,28 @@ function spawnGreenApple() {
     let attempts = 0
     const MAX_ATTEMPTS = 100
     
-    // Find a position not occupied by snake or regular food
+    // Find a position not occupied by snake or regular food, biased toward center
     while (!validPosition && attempts < MAX_ATTEMPTS) {
         attempts++
-        // Generate random position aligned to grid
-        appleX = Math.floor(Math.random() * GRID_WIDTH) * GRID_SIZE + GRID_SIZE / 2
-        appleY = Math.floor(Math.random() * GRID_HEIGHT) * GRID_SIZE + GRID_SIZE / 2
+        // Generate random position aligned to grid, biased toward center (60% of screen width/height)
+        const centerX = scene.screenWidth() / 2
+        const centerY = scene.screenHeight() / 2
+        const spawnWidth = scene.screenWidth() * 0.6
+        const spawnHeight = scene.screenHeight() * 0.6
+        
+        appleX = centerX + (Math.random() - 0.5) * spawnWidth
+        appleY = centerY + (Math.random() - 0.5) * spawnHeight
+        
+        // Align to grid
+        appleX = Math.floor(appleX / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
+        appleY = Math.floor(appleY / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2
         
         // Ensure position is within screen bounds
-        if (appleX < GRID_SIZE / 2) appleX = GRID_SIZE / 2
-        if (appleX >= scene.screenWidth() - GRID_SIZE / 2) appleX = scene.screenWidth() - GRID_SIZE / 2
-        if (appleY < GRID_SIZE / 2) appleY = GRID_SIZE / 2
-        if (appleY >= scene.screenHeight() - GRID_SIZE / 2) appleY = scene.screenHeight() - GRID_SIZE / 2
+        const SPRITE_HALF_SIZE = 4
+        if (appleX < SPRITE_HALF_SIZE) appleX = SPRITE_HALF_SIZE
+        if (appleX >= scene.screenWidth() - SPRITE_HALF_SIZE) appleX = scene.screenWidth() - SPRITE_HALF_SIZE
+        if (appleY < SPRITE_HALF_SIZE) appleY = SPRITE_HALF_SIZE
+        if (appleY >= scene.screenHeight() - SPRITE_HALF_SIZE) appleY = scene.screenHeight() - SPRITE_HALF_SIZE
         
         validPosition = true
         
@@ -230,21 +252,28 @@ function moveSnake() {
     else if (direction == 3) newX -= GRID_SIZE // Left
     
     // Check wall collision - game over if hit wall (unless invincible)
-    if (game.runtime() >= wallInvincibleUntil) {
-        if (newX < GRID_SIZE / 2 || newX >= scene.screenWidth() - GRID_SIZE / 2 ||
-            newY < GRID_SIZE / 2 || newY >= scene.screenHeight() - GRID_SIZE / 2) {
+    // Sprite is 8x8, so it extends 4 pixels from center. Allow it to reach the very edge.
+    const SPRITE_HALF_SIZE = 4
+    
+    // Check for wall collision
+    const outOfBounds = newX < SPRITE_HALF_SIZE || newX >= scene.screenWidth() - SPRITE_HALF_SIZE ||
+                        newY < SPRITE_HALF_SIZE || newY >= scene.screenHeight() - SPRITE_HALF_SIZE
+
+    if (outOfBounds) {
+        if (isWallInvincible) {
+            // Wrap around if invincible to walls
+            if (newX < SPRITE_HALF_SIZE) newX = scene.screenWidth() - SPRITE_HALF_SIZE
+            if (newX >= scene.screenWidth() - SPRITE_HALF_SIZE) newX = SPRITE_HALF_SIZE
+            if (newY < SPRITE_HALF_SIZE) newY = scene.screenHeight() - SPRITE_HALF_SIZE
+            if (newY >= scene.screenHeight() - SPRITE_HALF_SIZE) newY = SPRITE_HALF_SIZE
+        } else {
+            // Die if not invincible
             gameOver()
             return
         }
-    } else {
-        // Wrap around if invincible
-        if (newX < GRID_SIZE / 2) newX = scene.screenWidth() - GRID_SIZE / 2
-        if (newX >= scene.screenWidth() - GRID_SIZE / 2) newX = GRID_SIZE / 2
-        if (newY < GRID_SIZE / 2) newY = scene.screenHeight() - GRID_SIZE / 2
-        if (newY >= scene.screenHeight() - GRID_SIZE / 2) newY = GRID_SIZE / 2
     }
     
-    // Check collision with self (check before creating new head)
+    // Check collision with self (always check - no invincibility)
     for (let segment of snake) {
         // Calculate distance to check overlap
         let dx = Math.abs(segment.x - newX)
@@ -298,17 +327,19 @@ function moveSnake() {
     if (greenApple && !foodEaten) {
         let appleDx = Math.abs(newHead.x - greenApple.x)
         let appleDy = Math.abs(newHead.y - greenApple.y)
-        if (appleDx < GRID_SIZE && appleDy < GRID_SIZE) {
-            // Activate rainbow mode and wall invincibility (doesn't make snake grow)
-            isRainbowMode = true
-            wallInvincibleUntil = game.runtime() + 10000 // 10 seconds
-            greenApple.destroy()
-            greenApple = null
-            greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // Schedule next spawn
-            music.playTone(Note.E, 200)
-            updateSnakeRainbow()
-            greenAppleEaten = true
-        }
+            if (appleDx < GRID_SIZE && appleDy < GRID_SIZE) {
+                // Activate rainbow mode and wall invincibility (doesn't make snake grow)
+                isRainbowMode = true
+                isWallInvincible = true
+                // TEMPORARY: Make invincibility permanent for testing
+                wallInvincibleUntil = game.runtime() + 999999 // Very long time
+                greenApple.destroy()
+                greenApple = null
+                greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // Schedule next spawn
+                music.playTone(Note.E, 200)
+                updateSnakeRainbow()
+                greenAppleEaten = true
+            }
     }
     
     // Remove tail only if regular food wasn't eaten (green apples don't make snake grow)
@@ -367,8 +398,11 @@ game.onUpdateInterval(1000, function () {
     }
     
     // Check if wall invincibility expired
-    if (isRainbowMode && game.runtime() >= wallInvincibleUntil) {
+    const currentTime = game.runtime()
+    if (isWallInvincible && currentTime >= wallInvincibleUntil && wallInvincibleUntil > 0) {
+        isWallInvincible = false
         isRainbowMode = false
+        wallInvincibleUntil = 0
         // Revert snake to normal colors
         for (let segment of snake) {
             segment.setImage(img`
