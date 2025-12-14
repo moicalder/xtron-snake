@@ -261,11 +261,11 @@ function moveSnake() {
 
     if (outOfBounds) {
         if (isWallInvincible) {
-            // Wrap around if invincible to walls
-            if (newX < SPRITE_HALF_SIZE) newX = scene.screenWidth() - SPRITE_HALF_SIZE
-            if (newX >= scene.screenWidth() - SPRITE_HALF_SIZE) newX = SPRITE_HALF_SIZE
-            if (newY < SPRITE_HALF_SIZE) newY = scene.screenHeight() - SPRITE_HALF_SIZE
-            if (newY >= scene.screenHeight() - SPRITE_HALF_SIZE) newY = SPRITE_HALF_SIZE
+            // Wrap around if invincible to walls - place just inside the boundary
+            if (newX < SPRITE_HALF_SIZE) newX = scene.screenWidth() - SPRITE_HALF_SIZE - 1
+            if (newX >= scene.screenWidth() - SPRITE_HALF_SIZE) newX = SPRITE_HALF_SIZE + 1
+            if (newY < SPRITE_HALF_SIZE) newY = scene.screenHeight() - SPRITE_HALF_SIZE - 1
+            if (newY >= scene.screenHeight() - SPRITE_HALF_SIZE) newY = SPRITE_HALF_SIZE + 1
         } else {
             // Die if not invincible
             gameOver()
@@ -331,8 +331,8 @@ function moveSnake() {
                 // Activate rainbow mode and wall invincibility (doesn't make snake grow)
                 isRainbowMode = true
                 isWallInvincible = true
-                // TEMPORARY: Make invincibility permanent for testing
-                wallInvincibleUntil = game.runtime() + 999999 // Very long time
+                // Set invincibility to 10 seconds
+                wallInvincibleUntil = game.runtime() + 10000 // 10 seconds
                 greenApple.destroy()
                 greenApple = null
                 greenAppleSpawnTime = game.runtime() + (30000 + Math.random() * 15000) // Schedule next spawn
