@@ -13,11 +13,35 @@ let wallInvincibleUntil = 0
 let isWallInvincible = false
 let isRainbowMode = false
 let greenAppleSpawnTime = 0
+let gameState = "splash" // "splash" or "playing"
 
 // Game settings
 const GRID_SIZE = 8
 const GRID_WIDTH = Math.floor(scene.screenWidth() / GRID_SIZE)
 const GRID_HEIGHT = Math.floor(scene.screenHeight() / GRID_SIZE)
+
+// Show splash screen
+function showSplashScreen() {
+    gameState = "splash"
+    // Set background to loading screen
+    scene.setBackgroundImage(assets.image`loadingScreen`)
+    // Clear any existing sprites
+    sprites.destroyAllSpritesOfKind(SpriteKind.Player)
+    sprites.destroyAllSpritesOfKind(SpriteKind.Food)
+    // Display "Press A to start" text
+    // Note: Text positioning may need adjustment based on your loading screen image
+    scene.createRenderable(scene.BACKGROUND_SCENE, function (target, camera) {
+        target.print("Press A to start", 50, 100, 1, image.font8)
+    })
+}
+
+// Start the actual game
+function startGame() {
+    gameState = "playing"
+    // Reset background to default (black)
+    scene.setBackgroundColor(0)
+    initGame()
+}
 
 // Initialize game
 function initGame() {
@@ -233,7 +257,7 @@ function updateSnakeRainbow() {
 
 // Move snake
 function moveSnake() {
-    if (!gameRunning) return
+    if (!gameRunning || gameState !== "playing") return
     
     // Update direction (can't reverse)
     if (nextDirection == 0 && direction != 2) direction = 0
@@ -359,7 +383,7 @@ function gameOver() {
     gameRunning = false
     game.splash("Game Over!", "Score: " + score)
     pause(1000)
-    initGame()
+    showSplashScreen()
 }
 
 // Input handling
@@ -379,17 +403,26 @@ controller.left.onEvent(ControllerButtonEvent.Pressed, function () {
     nextDirection = 3
 })
 
-// Start game
-initGame()
+// A button handler for splash screen
+controller.A.onEvent(ControllerButtonEvent.Pressed, function () {
+    if (gameState === "splash") {
+        startGame()
+    }
+})
+
+// Start with splash screen
+showSplashScreen()
 
 // Game loop - move snake every 150ms
 game.onUpdateInterval(150, function () {
-    moveSnake()
+    if (gameState === "playing") {
+        moveSnake()
+    }
 })
 
 // Check for green apple spawn timer
 game.onUpdateInterval(1000, function () {
-    if (!gameRunning) return
+    if (!gameRunning || gameState !== "playing") return
     
     // Check if it's time to spawn green apple
     if (game.runtime() >= greenAppleSpawnTime && !greenApple) {
