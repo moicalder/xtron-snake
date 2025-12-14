@@ -29,10 +29,8 @@ function showSplashScreen() {
     sprites.destroyAllSpritesOfKind(SpriteKind.Player)
     sprites.destroyAllSpritesOfKind(SpriteKind.Food)
     // Display "Press A to start" text
-    // Note: Text positioning may need adjustment based on your loading screen image
-    scene.createRenderable(scene.BACKGROUND_SCENE, function (target, camera) {
-        target.print("Press A to start", 50, 100, 1, image.font8)
-    })
+    let startText = textsprite.create("Press A to start")
+    startText.setPosition(80, 100)
 }
 
 // Start the actual game
@@ -40,6 +38,8 @@ function startGame() {
     gameState = "playing"
     // Reset background to default (black)
     scene.setBackgroundColor(0)
+    // Clear any text sprites from splash screen
+    sprites.destroyAllSpritesOfKind(SpriteKind.Text)
     initGame()
 }
 
